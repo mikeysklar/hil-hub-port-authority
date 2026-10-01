@@ -14,11 +14,17 @@ on Linux (bene, Ubuntu 26.04) and macOS (Mac mini M4 Pro). Details in
 - On a Feather RP2040 Adalogger this caused about 1 in 10 power-ons to land
   in the ROM bootloader. 70/70 clean with the cable unplugged.
 - Same result on two hubs with two different 5 V supplies.
-- Two paths: SDA/SCL through the BSS138 level shifter (hub side pulled up to
-  the hub's 3.3 V), and STEMMA V+. A diode on V+ blocks only one of them.
-- **Suggested fix, later rev:** replace the BSS138 shifter with an I2C
-  buffer that isolates when either side is unpowered. Candidates: PCA9517A,
-  TCA9617A (not yet checked against their datasheets).
+- Path: hub 3.3 V, hub-side pull-up, BSS138 body diode, STEMMA-side
+  pull-up, STEMMA V+, controller rail.
+- With only the cable's V+ wire cut: rail 0 V with the port off, 33/33
+  clean power-ons (2026-10-01). V+ is the path that matters; SDA/SCL alone
+  did not back-feed the Adalogger.
+- **Suggested fix, later rev (ladyada):** a diode on STEMMA1 V+, controller
+  to hub only. Keeps pass-through power to STEMMA2. Controller goes on
+  STEMMA1, add-ons such as an OLED on STEMMA2; mark it on the silkscreen.
+  Still to check: a real Schottky in place of the cut wire, and controllers
+  with their own I2C pull-ups. Fuller option: an I2C buffer that isolates
+  when either side is unpowered (PCA9517A, TCA9617A, unchecked).
 - **Now, in the guide:** keep the I2C controller always powered (a port that
   is never switched, or another hub), or unplug the STEMMA cable before
   cutting its port.

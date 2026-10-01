@@ -37,7 +37,7 @@ not yet tested or not conclusive.
 
 | Problem | Status | Detail |
 |---|---|---|
-| STEMMA QT back-feeds an unpowered controller | Problem, confirmed | 0.98 V on the controller's 3.3 V rail with its port off. Caused about 1 in 10 ROM bootloader boots on the Feather RP2040 Adalogger (7/70 + 1/6 + 1/20 + 1/4 with cable; 70/70 clean without). Guide note now; I2C buffer with power-off isolation in a later rev |
+| STEMMA QT back-feeds an unpowered controller | Problem, fix found | 0.98 V on the controller's 3.3 V rail with its port off; about 1 in 10 ROM bootloader boots on the Feather RP2040 Adalogger (7/70 + 1/6 + 1/20 + 1/4 with cable; 70/70 clean without). Path: hub 3.3 V, hub-side pull-up, BSS138 body diode, STEMMA-side pull-up, V+. With only the cable's V+ wire cut: 0 V, 33/33 clean (2026-10-01). Fix (ladyada): diode on STEMMA1 V+, controller to hub only; controller on STEMMA1, add-ons on STEMMA2. Real diode and other controllers untested |
 | Linux keeps USB-serial boards listed after power-off | Fixed (host setup) | With `uhubctl -S` the kernel is not told. Fixed by the udev rule for the per-port `disable` files; ESP32 V2 now drops in 5 ms |
 | Intermittent INA3221 read timeouts | Not the hub | Followed the controller's old dev firmware (SDIO build + SD benchmark). 0 errors in 60 reads after flashing CP 11.0.0-alpha.1 |
 | Barrel jack suspected | Not the cause | Coincided with the STEMMA cable coming loose. Cheap USB-to-barrel adapter does dip the rail more (4.77 V vs 4.98 V) but stays in spec |

@@ -31,10 +31,12 @@ Short summary: [docs/testing-summary.md](docs/testing-summary.md).
 
 ## Concerns
 
-1. **STEMMA QT back-feeds an unpowered controller.** Its 3.3 V rail sits at
-   0.98 V with its port off; a Feather RP2040 lands in the bootloader about
-   1 in 10 boots. Fix: an I2C buffer with power-off isolation (PCA9517A or
-   TCA9617A, unverified). Now: keep the controller always powered.
+1. **STEMMA QT V+ back-feeds an unpowered controller.** Its 3.3 V rail sits
+   at 0.98 V with its port off; a Feather RP2040 lands in the bootloader
+   about 1 in 10 boots. Path: hub 3.3 V through the BSS138 body diode and
+   QT-side pull-ups onto V+. With only the V+ wire cut: 0 V, 33/33 clean.
+   Fix: a diode on STEMMA1 V+, controller on STEMMA1, add-ons on STEMMA2.
+   Now: keep the controller always powered.
 2. **A chained hub with an ESP32 V2 never recovers after its upstream port
    is cut.** It loops connect/disconnect forever. Fine empty, with native-USB
    boards, or with the V2 on the top-level hub. Keep USB-serial boards on the

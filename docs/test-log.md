@@ -967,3 +967,30 @@ EEPROM bus alone); write; DIP 1 2 3 4 on; SW1 ON.
   theory for the blank case. SMBus mode (`1 1 1 0`) is still unexplained.
 - Practical win: the hub now has a USB serial number, so two hubs can be
   told apart without relying on USB path.
+
+## STEMMA QT V+ wire cut, 2026-10-01: back-feed gone
+
+Hub A (`1-1`, PA-A), Feather RP2040 Adalogger alone on port 1, its STEMMA QT
+cable to the hub with only the red (V+) wire cut. SDA, SCL and GND still
+connected.
+
+- Adalogger 3V pin with port 1 off: **0 V** (was 0.98 V with V+ intact).
+- `i2c_scan.py 1-1 1`: 0x40 (INA3221) and 0x50-0x57 (24LC02) still answer.
+- `cycle_port.py 1-1 1 10 2`: **10/10** POWER_ON
+  (`results/t2-hubA-port1-stemma-vplus-cut.txt`).
+- `cycle_port.py 1-1 1 70 2`: stopped by hand at **23/23** POWER_ON
+  (`results/t2-hubA-port1-stemma-vplus-cut-70.txt`).
+
+33/33 clean. At the earlier ~1 in 10 rate that happens by chance about 3%
+(0.9^33).
+
+Path from the Rev C schematic: hub 3.3 V, R5 G$2/G$4 (hub-side 10K), Q2
+BSS138 body diode (source to drain), `SDA_QT`/`SCL_QT`, R5 G$1/G$3 (10K to
+`VCC`), `VCC` = STEMMA1/2 V+, controller 3.3 V rail. `VCC` never touches
+the hub's 3.3 V; the body diode is the bridge. SDA/SCL alone did not
+back-feed the Adalogger.
+
+Fix (ladyada): diode on STEMMA1 V+, controller to hub only, keeps
+pass-through power to STEMMA2. Not yet tried with a real diode, and only on
+the Adalogger. With V+ cut, STEMMA2 and the QT-side pull-ups are unpowered;
+I2C still works, likely pulled up through the body diode.
