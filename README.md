@@ -26,6 +26,7 @@ configuration.
 | STEMMA2 pass-through | OLED on STEMMA2 shares the bus with the INA3221 |
 | I2C OLED status display | SSD1306 128x64 (Adafruit 326) shows live V/mA and on/off per port |
 | SWD through the hub | Feather RP2350 attach, halt, flash (11.2 s) with a Raspberry Pi Debug Probe |
+| Chaining two hubs (USB) | Works, with a restriction. Nested `uhubctl -l 1-1.4` paths work, and cutting the port that feeds the second hub power-cycles it and its boards. Keep USB-serial boards (ESP32 V2) on the top-level hub, see problems |
 
 ![OLED on STEMMA2 showing live voltage and current per port](images/oled-status-display.jpg)
 
@@ -38,6 +39,7 @@ controller, `test-scripts/oled_push.py` on the host for the on/off state.
 |---|---|
 | **STEMMA QT back-feeds an unpowered controller.** A powered I2C cable holds the board's 3.3 V rail at about 0.98 V with its port off. On a Feather RP2040 Adalogger this caused about 1 in 10 ROM bootloader boots; 70/70 clean with the cable unplugged. Tried on two hubs with two 5 V supplies. | Confirmed. Guide note now; an I2C buffer with power-off isolation in a later rev |
 | **SMBus (`1 1 1 0`) and EEPROM (`1 1 1 1`) DIP modes do not start.** Hub stays off USB, never answers at 0x2C, host sees a failed low-speed device at every reset. The config EEPROM ships blank. | Parked. Unconfirmed theory: blank EEPROM loads register 0xFA bit 0, swapping upstream D+/D- |
+| **A chained hub with an ESP32 V2 on it does not come back after its upstream port is cut.** It enumerates, loses its link about 0.1 s later, and repeats forever. Fine when empty or with a Feather RP2040 or thumb drive, and the V2 runs fine on the top-level hub. Not a current problem: every board draws the same ~900 mA capacitor spike for under 1 ms. | Open. Suspect: the V2's CH9102 USB-serial chip connects the instant it gets power. Workaround: switch the V2's own port, or keep it on the top-level hub |
 | Linux keeps USB-serial boards listed after power-off | Fixed on the host: udev rule for the per-port `disable` files (see host setup) |
 | No USB serial number on the hub | Note: two hubs can only be told apart by USB path |
 
@@ -87,7 +89,8 @@ The sandwich case plate STLs are not checked in (58 MB); the script writes them.
 
 ## Not tested yet
 
-Chaining two hubs, port LEDs and over-current, INA3221 accuracy against a
+I2C chaining of two hubs (needs the second hub's INA3221 A0 jumper bridged),
+port LEDs and over-current, INA3221 accuracy against a
 meter, JST-XH connectors, macOS.
 
 ## License

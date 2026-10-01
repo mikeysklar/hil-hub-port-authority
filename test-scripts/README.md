@@ -32,6 +32,8 @@ addressed by USB path (`1-2` hub, port N), never by `ttyACM` number.
 | `ina3221_volts.py` | T5/T8 | INA3221 bus voltage and current on ports 1-3, min/avg/max |
 | `ina_ramp.py` | T8 debug | fast INA3221 capture of a port VBUS ramp or rail dip during uhubctl power-on |
 | `backup_repl.py` | setup | back up every file on a board over the serial REPL (base64), for boards with no drive |
+| `ina_inrush.py` | T5/T11 | fast INA3221 current capture of a board's power-on on ports 1-3, ~288 us/sample for ~2.3 s |
+| `chain_cut.py` | T11 | cut the upstream port of a chained hub; compares a native-USB board's uptime before and after |
 | `ina_channel_map.py` | T5 | map INA3221 channels to ports by switching one port off at a time |
 | `cold_compare.sh` | T4 debug | uhubctl cold boot of the controller, then i2c_compare.py, N times |
 | `smbus_probe.py` | T9 | scan, then block-read register 0x00 at the hub's SMBus address 0x2C (DIP `1 1 1 0`) |
