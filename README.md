@@ -19,7 +19,10 @@ configuration.
 | Enumeration | `0424:2514`, Multi-TT, per-port power and over-current reported |
 | Per-port power (`uhubctl`) | Clean cutoffs on two hubs: port reads `0000 off`, board leaves the bus, VBUS 0.000 V |
 | Power cycling | Feathers M0, RP2040, RP2350, ESP32 V2 cycle cleanly (30/30 RP2350 with a Debug Probe attached) |
-| Current monitoring | INA3221 at 0x40, channel N = port N, no crosstalk; port 4 unmonitored by design |
+| Current monitoring | INA3221 at 0x40, channel N = port N, no crosstalk; port 4 unmonitored by design. Reads 1.15-1.17 A where a USB meter read 1.2 A |
+| Port current | At least 1.17 A per port continuously (battery pack charging, 30 s, no fault), above the ~1 A design target |
+| Port LEDs | Green follows port power. Red (switch fault) never triggered in testing |
+| macOS | Daily use on a Mac mini M4 Pro, macOS 26.6.2, Homebrew uhubctl 2.6.0, no sudo: power control, bootloader entry and hard resets fine |
 | Hub reset slide switch SW1 | Hub and all ports drop and return |
 | External 5 V (barrel jack) | Hot-plug without a disconnect |
 | DIP `0 0 0 1` (bus-powered) | Reports Bus Powered; default `0 0 0 0` reports Self Powered |
@@ -40,6 +43,7 @@ controller, `test-scripts/oled_push.py` on the host for the on/off state.
 | **STEMMA QT back-feeds an unpowered controller.** A powered I2C cable holds the board's 3.3 V rail at about 0.98 V with its port off. On a Feather RP2040 Adalogger this caused about 1 in 10 ROM bootloader boots; 70/70 clean with the cable unplugged. Tried on two hubs with two 5 V supplies. | Confirmed. Guide note now; an I2C buffer with power-off isolation in a later rev |
 | **SMBus (`1 1 1 0`) and EEPROM (`1 1 1 1`) DIP modes do not start.** Hub stays off USB, never answers at 0x2C, host sees a failed low-speed device at every reset. The config EEPROM ships blank. | Parked. Unconfirmed theory: blank EEPROM loads register 0xFA bit 0, swapping upstream D+/D- |
 | **A chained hub with an ESP32 V2 on it does not come back after its upstream port is cut.** It enumerates, loses its link about 0.1 s later, and repeats forever. Fine when empty or with a Feather RP2040 or thumb drive, and the V2 runs fine on the top-level hub. Not a current problem: every board draws the same ~900 mA capacitor spike for under 1 ms. | Open. Suspect: the V2's CH9102 USB-serial chip connects the instant it gets power. Workaround: switch the V2's own port, or keep it on the top-level hub |
+| **A Raspberry Pi 4 with an external drive is at the edge of one port.** 0.65 A idle, peaks to 1.24 A; the port sagged to 3.87 V and the Pi browned out and rebooted twice with no fault flagged | Note for the guide: power Pi-class loads separately |
 | Linux keeps USB-serial boards listed after power-off | Fixed on the host: udev rule for the per-port `disable` files (see host setup) |
 | No USB serial number on the hub | Note: two hubs can only be told apart by USB path |
 
@@ -90,8 +94,7 @@ The sandwich case plate STLs are not checked in (58 MB); the script writes them.
 ## Not tested yet
 
 I2C chaining of two hubs (needs the second hub's INA3221 A0 jumper bridged),
-port LEDs and over-current, INA3221 accuracy against a
-meter, JST-XH connectors, macOS.
+JST-XH connectors, the red fault LED.
 
 ## License
 

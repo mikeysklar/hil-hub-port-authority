@@ -881,3 +881,57 @@ full-speed (12M) and connects at once, so it goes through hub B's
 transaction translator during start-up; the native Feathers are also
 full-speed but connect ~1.5 s later. Untested: an instant-connect
 full-/low-speed device (keyboard, mouse).
+
+## T14. macOS, 2026-10-01: PASS (user report, setup recorded)
+
+Reported by the user: hub in active daily use on macOS with no issues;
+`uhubctl` power control works, boards enter the bootloader and hard-reset
+through it without problems. Setup read from scusi.local:
+
+- Mac mini (Mac16,11), Apple M4 Pro, 48 GB, macOS 26.6.2 (25G83), arm64.
+- `uhubctl` 2.6.0 from Homebrew (`/opt/homebrew/bin/uhubctl`), no sudo.
+- Port Authority at `0-1.2.2`, three hubs deep (Mac → Realtek `0bda:5423`
+  `0-1` → Realtek `0bda:5411` `0-1.2` → Port Authority), reported `ppps`.
+
+| Port | Board | Firmware (boot_out.txt) |
+|---|---|---|
+| 1 | Feather RP2350 `239a:8150` | CP 11.0.0-alpha.0-29-g350e789032-dirty (2026-09-30) |
+| 2 | Feather ESP32-S3 4MB/2MB PSRAM `239a:811c` | CP 11.0.0-alpha.1 |
+| 3 | Feather RP2040 `239a:80f2` | CP 11.0.0-alpha.1 |
+| 4 | QT Py ESP32-S3 4MB/2MB PSRAM `239a:8144` | CP 11.0.0-alpha.1-8-gd47f5a8b83 (2026-09-29) |
+
+All four native USB. No USB-serial-bridge board on this hub, so the T11
+ESP32 V2 chaining restriction is not exercised here, even though this
+Port Authority is itself behind two hubs (it is not power-cycled as a whole).
+
+## T6. Port LEDs and over-current, 2026-10-01: green PASS, red NOT TRIGGERED
+
+Green: user reports the LEDs follow uhubctl port power on/off in daily use.
+
+Red is driven by the AP22653 FAULT output (open drain, also `OCS_N` to the
+USB2514B). Datasheet DS41186: FAULT asserts on over-current/over-temperature
+after a 2-20 ms (typ 6 ms) blanking time; AP22653 (non-A) current-limits and
+recovers by itself, no latch-off. RLIM is 25.5 kOhm (design target "about
+1 A"); the datasheet table gives 1.29 A at 20 kOhm and 0.49 A at 49.9 kOhm,
+so 25.5 kOhm is between, exact value unknown.
+
+`ina_watch.py` (new): one channel, shunt + bus, ~1.3 k samples/s, per-second
+min/avg/max; `on_after_s = -1` watches without switching the port.
+
+| Load on hub A port 2 | Current | Port V | Red / OC reported |
+|---|---|---|---|
+| Raspberry Pi 4 + external drive, idle | 645-730 mA, ~654 avg | 4.76 | no / 0 |
+| same, busy spells | 0.9-1.0 A avg, peaks 1.10-1.24 A | dips to 4.31 and 3.87 | no / 0 |
+| Battery pack charging | 1170 mA avg, flat for 30 s | 4.52 | **no, LED green** / 0 |
+
+- The Pi 4 twice dropped to 18 mA right after a 1.1-1.2 A peak with the
+  port at 3.87-4.31 V, then drew ~400 mA for 2 s and settled: looks like a
+  brown-out reset of the Pi, not a port cut (`results/watch-pi4-stress-p2.txt`).
+  The switch never flagged a fault, so the red LED gives no warning of it.
+- The battery pack held 1.17 A steady with no fault and a green LED, so this
+  port's limit is above 1.17 A (or the pack caps itself there). User's
+  meter read 1.2 A, INA3221 1.15-1.17 A.
+- Whole-hub supply sag under these loads: port 3 fell from 5.10 V to
+  4.69-4.82 V.
+- Red LED and the OCS report to Linux still unverified; needs a load over
+  the real limit (electronic load, ~3.3 ohm power resistor, or a short).

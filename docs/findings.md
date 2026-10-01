@@ -20,8 +20,10 @@ not yet tested or not conclusive.
 | Bus-powered mode, DIP `0 0 0 1` | Works | Reports `0xa0` Bus Powered, MaxPower 100 mA; per-port switching unchanged. Default `0 0 0 0` reports Self Powered regardless of source, by design |
 | No USB serial number | Note | Two hubs can only be told apart by USB path |
 | STEMMA2 pass-through | Works | OLED on STEMMA2 scans at 0x3D alongside the INA3221 at 0x40, same bus as STEMMA1 |
-| INA3221 accuracy vs meter | Open | |
-| Port LEDs, over-current, red LED | Open | Over-current test gated, needs a defined load |
+| INA3221 accuracy vs meter | Rough check | Battery pack charging on port 2: INA3221 1.15-1.17 A, user's meter 1.2 A (within ~5%). One point only; no low-current check |
+| Port LEDs, green | Works | Follows uhubctl port power on/off (user, daily use) |
+| Over-current limit and red LED | Works well enough, red not pursued | Ports deliver at least 1.17 A continuously, beyond the ~1 A design target. Red LED never triggered and not tested further (decision 2026-10-01). Red = AP22653 FAULT (also OCS to the hub), after a ~6 ms blanking time, auto-recovering. Battery pack held 1.17 A for 30 s with green LED and no OC reported; Pi 4 + drive peaked 1.10-1.24 A briefly without a fault. |
+| Port power under heavy load | Note | Pi 4 + external drive on one port: 0.65 A idle, 0.9-1.0 A busy, peaks to 1.24 A; port sagged to 3.87 V and the Pi browned out and rebooted twice with no fault flagged. Whole-hub supply sagged too (another port 5.10 V to 4.69-4.82 V) on the 4 A barrel. Guide: Pi-class loads are at this port's edge |
 | SMBus mode, DIP `1 1 1 0` | Problem, parked | Hub stays off USB but never answers at 0x2C. See problems below |
 | EEPROM mode, DIP `1 1 1 1` | Problem, parked | EEPROM ships blank (all `0xFF`); hub does not enumerate. Needs a programmed EEPROM |
 | JST-XH per-port connectors | Open | |
@@ -29,7 +31,7 @@ not yet tested or not conclusive.
 | Chaining two hubs, I2C | Open | Needs hub B's INA3221 A0 jumper bridged (0x41) |
 | I2C display on STEMMA | Works | Adafruit 326 (0.96" 128x64 SSD1306, 0x3D) on STEMMA2: `controller/oled_ports.py` shows V/mA for ports 1-3 from the INA3221; `oled_push.py` sends on/off for all 4 from uhubctl. Port changes show within about a second |
 | SWD / openocd through the hub | Works | Feather RP2350: attach, `reset halt`, resume; `cannot read IDR` with the port off. 30/30 clean power cycles with the probe attached (no back-feed). RP2350 needs the raspberrypi openocd fork |
-| macOS | Open | |
+| macOS | Works (user report) | Daily use on a Mac mini M4 Pro, macOS 26.6.2, Homebrew uhubctl 2.6.0, no sudo. Power control, bootloader entry and hard resets fine with Feather RP2350, Feather ESP32-S3, Feather RP2040, QT Py ESP32-S3. Hub was three deep behind two Realtek hubs |
 
 ## Problems found
 
