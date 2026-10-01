@@ -935,3 +935,35 @@ min/avg/max; `on_after_s = -1` watches without switching the port.
   4.69-4.82 V.
 - Red LED and the OCS report to Linux still unverified; needs a load over
   the real limit (electronic load, ~3.3 ohm power resistor, or a short).
+
+## T9d. EEPROM config with custom strings, hub A, 2026-10-01: PASS
+
+`eeprom_write.py` (new) builds a 256-byte USB2514B image from the datasheet
+5.1 defaults (VID 0424, PID 2514, DID 0BB3, `9B 20 02` config bytes, port
+swap 0x00) plus STRING_EN (reg 0x08 = 0x03), language 0x0409, and UTF-16LE
+strings, then writes it from the controller in 8-byte pages with ACK
+polling and reads it back.
+
+Procedure: DIP 1 2 3 on, 4 off, hub A SW1 OFF (hub held in reset, leaves the
+EEPROM bus alone); write; DIP 1 2 3 4 on; SW1 ON.
+
+- Write: `VERIFY OK`, all 256 bytes (`results/t9d-eeprom-write.txt`,
+  image `results/eeprom-PA-A.bin`).
+- Two script bugs fixed on the way: the write-cycle poll used
+  `time.monotonic()`, a float too coarse after days of controller uptime, so
+  its 50 ms timeout fired at once (failed at page 0x58); now
+  `time.monotonic_ns()`. Page writes also retry up to 5 times.
+- Hub A with DIP `1 1 1 1` now enumerates from the EEPROM:
+  ```
+  usb 1-1: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+  usb 1-1: Product: Port Authority
+  usb 1-1: Manufacturer: Adafruit Industries
+  usb 1-1: SerialNumber: PA-A
+  ```
+  `0424:2514`, Multi-TT, self-powered (`0xe0`), all four ports and hub B
+  present; uhubctl shows `[0424:2514 Adafruit Industries Port Authority PA-A]`.
+- **Resolves T9c:** `1 1 1 1` failed only because the EEPROM was blank.
+  With a valid image EEPROM mode works, which supports the 0xFA port-swap
+  theory for the blank case. SMBus mode (`1 1 1 0`) is still unexplained.
+- Practical win: the hub now has a USB serial number, so two hubs can be
+  told apart without relying on USB path.

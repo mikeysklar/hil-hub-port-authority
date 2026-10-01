@@ -1,100 +1,84 @@
 # hil-hub-port-authority
 
-Bench notes, test scripts and cases for the **Port Authority** hub
-(Adafruit Smart HIL Hub Rev C), from the first 10-board JLC run, tested
-2026-09-24 to 2026-09-30.
+Test notes, scripts and cases for the **Port Authority** 4-port USB hub
+(Adafruit Smart HIL Hub Rev C), first JLC run, tested 2026-09-24 to 2026-10-01.
 
-The hub is a 4-port USB 2.0 hub (Microchip USB2514B) built for
-hardware-in-the-loop test benches: per-port power switching with `uhubctl`,
-per-port current monitoring (INA3221, ports 1-3), two STEMMA QT connectors for
-an I2C controller and display, external 5 V input, and DIP-selectable hub
-configuration.
+USB2514B hub with per-port power switching (`uhubctl`), INA3221 current
+monitoring on ports 1-3, two STEMMA QT ports, external 5 V input and DIP
+config modes.
 
 ![Three Port Authority hubs in sandwich cases](images/three-hubs.jpg)
 
-## What works
+Short summary: [docs/testing-summary.md](docs/testing-summary.md).
+
+## Works
 
 | Feature | Result |
 |---|---|
-| Enumeration | `0424:2514`, Multi-TT, per-port power and over-current reported |
-| Per-port power (`uhubctl`) | Clean cutoffs on two hubs: port reads `0000 off`, board leaves the bus, VBUS 0.000 V |
-| Power cycling | Feathers M0, RP2040, RP2350, ESP32 V2 cycle cleanly (30/30 RP2350 with a Debug Probe attached) |
-| Current monitoring | INA3221 at 0x40, channel N = port N, no crosstalk; port 4 unmonitored by design. Reads 1.15-1.17 A where a USB meter read 1.2 A |
-| Port current | At least 1.17 A per port continuously (battery pack charging, 30 s, no fault), above the ~1 A design target |
-| Port LEDs | Green follows port power. Red (switch fault) never triggered in testing |
-| macOS | Daily use on a Mac mini M4 Pro, macOS 26.6.2, Homebrew uhubctl 2.6.0, no sudo: power control, bootloader entry and hard resets fine |
-| Hub reset slide switch SW1 | Hub and all ports drop and return |
-| External 5 V (barrel jack) | Hot-plug without a disconnect |
-| DIP `0 0 0 1` (bus-powered) | Reports Bus Powered; default `0 0 0 0` reports Self Powered |
-| STEMMA2 pass-through | OLED on STEMMA2 shares the bus with the INA3221 |
-| I2C OLED status display | SSD1306 128x64 (Adafruit 326) shows live V/mA and on/off per port |
-| SWD through the hub | Feather RP2350 attach, halt, flash (11.2 s) with a Raspberry Pi Debug Probe |
-| Chaining two hubs (USB) | Works, with a restriction. Nested `uhubctl -l 1-1.4` paths work, and cutting the port that feeds the second hub power-cycles it and its boards. Keep USB-serial boards (ESP32 V2) on the top-level hub, see problems |
+| Per-port power | Clean cutoffs, Linux and macOS, no sudo |
+| Power cycling | Feather M0, RP2040, RP2350, ESP32 V2 |
+| Current monitoring | Ports 1-3, within ~5% of a USB meter |
+| Port current | 1.17 A+ continuous per port |
+| Green port LEDs | Follow port power |
+| SW1 reset, external 5 V | Both work |
+| DIP `0 0 0 1` | Reports bus-powered |
+| EEPROM mode `1 1 1 1` | Works once programmed; custom name and serial |
+| STEMMA2 + OLED | Live per-port status display |
+| SWD through the hub | RP2350 flash and verify in 11.2 s |
+| USB chaining | Works, see concern 2 |
 
 ![OLED on STEMMA2 showing live voltage and current per port](images/oled-status-display.jpg)
 
-The OLED status display: `test-scripts/controller/oled_ports.py` on the
-controller, `test-scripts/oled_push.py` on the host for the on/off state.
+## Concerns
 
-## Problems found
+1. **STEMMA QT back-feeds an unpowered controller.** Its 3.3 V rail sits at
+   0.98 V with its port off; a Feather RP2040 lands in the bootloader about
+   1 in 10 boots. Fix: an I2C buffer with power-off isolation (PCA9517A or
+   TCA9617A, unverified). Now: keep the controller always powered.
+2. **A chained hub with an ESP32 V2 never recovers after its upstream port
+   is cut.** It loops connect/disconnect forever. Fine empty, with native-USB
+   boards, or with the V2 on the top-level hub. Keep USB-serial boards on the
+   top-level hub.
 
-| Problem | Status |
-|---|---|
-| **STEMMA QT back-feeds an unpowered controller.** A powered I2C cable holds the board's 3.3 V rail at about 0.98 V with its port off. On a Feather RP2040 Adalogger this caused about 1 in 10 ROM bootloader boots; 70/70 clean with the cable unplugged. Tried on two hubs with two 5 V supplies. | Confirmed. Guide note now; an I2C buffer with power-off isolation in a later rev |
-| **SMBus (`1 1 1 0`) and EEPROM (`1 1 1 1`) DIP modes do not start.** Hub stays off USB, never answers at 0x2C, host sees a failed low-speed device at every reset. The config EEPROM ships blank. | Parked. Unconfirmed theory: blank EEPROM loads register 0xFA bit 0, swapping upstream D+/D- |
-| **A chained hub with an ESP32 V2 on it does not come back after its upstream port is cut.** It enumerates, loses its link about 0.1 s later, and repeats forever. Fine when empty or with a Feather RP2040 or thumb drive, and the V2 runs fine on the top-level hub. Not a current problem: every board draws the same ~900 mA capacitor spike for under 1 ms. | Open. Suspect: the V2's CH9102 USB-serial chip connects the instant it gets power. Workaround: switch the V2's own port, or keep it on the top-level hub |
-| **A Raspberry Pi 4 with an external drive is at the edge of one port.** 0.65 A idle, peaks to 1.24 A; the port sagged to 3.87 V and the Pi browned out and rebooted twice with no fault flagged | Note for the guide: power Pi-class loads separately |
-| Linux keeps USB-serial boards listed after power-off | Fixed on the host: udev rule for the per-port `disable` files (see host setup) |
-| No USB serial number on the hub | Note: two hubs can only be told apart by USB path |
+## Doesn't work
 
-## Host setup (Linux)
+- SMBus DIP mode `1 1 1 0`: hub never enumerates. Parked.
+- EEPROM mode as shipped: the EEPROM is blank. Program it with
+  `test-scripts/eeprom_write.py`.
+- Pi 4 plus drive on one port browns out at 1.24 A peaks.
 
-Short version, full notes in [docs/host-setup.md](docs/host-setup.md):
+## Untested
 
-- `sudo apt-get install uhubctl` plus a udev rule for the hub (`0424`) and
-  the per-port `disable` files, so `uhubctl` runs without sudo and Linux sees
-  the power-off. Do not use `uhubctl -S`.
-- Address boards by USB path (`/dev/serial/by-path/...`), never `ttyACM` numbers.
-- SWD: stock openocd 0.12.0 handles RP2040; RP2350 needs the
-  [raspberrypi openocd fork](https://github.com/raspberrypi/openocd).
+- I2C chaining (needs the A0 jumper)
+- Red fault LED
+- JST-XH connectors
 
-## Repo layout
+## Linux setup
+
+Full notes: [docs/host-setup.md](docs/host-setup.md).
+
+- `apt install uhubctl` plus udev rules for the hub and the per-port
+  `disable` files. Don't use `uhubctl -S`.
+- Address boards by `/dev/serial/by-path`, not `ttyACM` numbers.
+- SWD on RP2350 needs the [raspberrypi openocd fork](https://github.com/raspberrypi/openocd).
+
+## Repo
 
 | Path | Contents |
 |---|---|
-| [docs/findings.md](docs/findings.md) | Status of every feature and problem |
-| [docs/test-log.md](docs/test-log.md) | Every test with commands, output and pass/fail |
-| [docs/test-plan.md](docs/test-plan.md) | Test plan T1-T15 |
-| [docs/host-setup.md](docs/host-setup.md) | Linux host setup and workarounds |
-| [test-scripts/](test-scripts/) | Python and shell scripts used for the tests, see its README |
-| [case/sandwich/](case/sandwich/) | Two-plate sandwich case (FreeCAD script, FCStd, STEP, 3MF) |
-| [case/skadis/](case/skadis/) | IKEA SKADIS pegboard frame (FreeCAD script, FCStd, STEP, 3MF, STL) |
+| [docs/](docs/) | findings, full test log, test plan, host setup, summary |
+| [test-scripts/](test-scripts/) | test scripts, see its README |
+| [case/sandwich/](case/sandwich/) | two-plate case: FreeCAD script, FCStd, STEP, 3MF |
+| [case/skadis/](case/skadis/) | IKEA SKADIS frame: FreeCAD script, FCStd, STEP, 3MF, STL |
 
-The cases are generated by `build_case.py` with FreeCAD headless:
-
-```sh
-/Applications/FreeCAD.app/Contents/Resources/bin/freecadcmd build_case.py
-```
-
-The sandwich case plate STLs are not checked in (58 MB); the script writes them.
-
-### Sandwich case
+Build a case with `freecadcmd build_case.py`; it also writes the STLs left
+out of the repo.
 
 | | |
 |---|---|
 | ![Clear sandwich case with port LEDs lit](images/sandwich-clear-lit.jpg) | ![Clear case, connector side](images/sandwich-clear-ports.jpg) |
 | ![Pink sandwich case, top plate](images/sandwich-pink-top.jpg) | ![Printed top and bottom plates](images/sandwich-plates-printed.jpg) |
-
-### SKADIS frame
-
-![Hub on the SKADIS frame with pegboard hooks](images/skadis-frame-with-hub.jpg)
-
-![Printed SKADIS frame with heat-set insert bosses](images/skadis-frame-print.jpg)
-
-## Not tested yet
-
-I2C chaining of two hubs (needs the second hub's INA3221 A0 jumper bridged),
-JST-XH connectors, the red fault LED.
+| ![Hub on the SKADIS frame with pegboard hooks](images/skadis-frame-with-hub.jpg) | ![Printed SKADIS frame with heat-set insert bosses](images/skadis-frame-print.jpg) |
 
 ## License
 

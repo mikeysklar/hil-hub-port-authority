@@ -18,14 +18,14 @@ not yet tested or not conclusive.
 | Current monitoring, ports 1-3 | Works | Channel N = port N, no crosstalk, 0 mA / 0 V when off; port 4 unmonitored by design |
 | External 5 V input (barrel jack) | Works | Hot-plug without disconnect; 4 A supply as stiff as USB-C |
 | Bus-powered mode, DIP `0 0 0 1` | Works | Reports `0xa0` Bus Powered, MaxPower 100 mA; per-port switching unchanged. Default `0 0 0 0` reports Self Powered regardless of source, by design |
-| No USB serial number | Note | Two hubs can only be told apart by USB path |
+| USB serial number | Works with EEPROM | Ships with none (two hubs only told apart by USB path). With a programmed EEPROM and DIP `1 1 1 1` the hub reports a serial, e.g. `PA-A` |
 | STEMMA2 pass-through | Works | OLED on STEMMA2 scans at 0x3D alongside the INA3221 at 0x40, same bus as STEMMA1 |
 | INA3221 accuracy vs meter | Rough check | Battery pack charging on port 2: INA3221 1.15-1.17 A, user's meter 1.2 A (within ~5%). One point only; no low-current check |
 | Port LEDs, green | Works | Follows uhubctl port power on/off (user, daily use) |
 | Over-current limit and red LED | Works well enough, red not pursued | Ports deliver at least 1.17 A continuously, beyond the ~1 A design target. Red LED never triggered and not tested further (decision 2026-10-01). Red = AP22653 FAULT (also OCS to the hub), after a ~6 ms blanking time, auto-recovering. Battery pack held 1.17 A for 30 s with green LED and no OC reported; Pi 4 + drive peaked 1.10-1.24 A briefly without a fault. |
 | Port power under heavy load | Note | Pi 4 + external drive on one port: 0.65 A idle, 0.9-1.0 A busy, peaks to 1.24 A; port sagged to 3.87 V and the Pi browned out and rebooted twice with no fault flagged. Whole-hub supply sagged too (another port 5.10 V to 4.69-4.82 V) on the 4 A barrel. Guide: Pi-class loads are at this port's edge |
 | SMBus mode, DIP `1 1 1 0` | Problem, parked | Hub stays off USB but never answers at 0x2C. See problems below |
-| EEPROM mode, DIP `1 1 1 1` | Problem, parked | EEPROM ships blank (all `0xFF`); hub does not enumerate. Needs a programmed EEPROM |
+| EEPROM mode, DIP `1 1 1 1` | Works once programmed | EEPROM ships blank and the hub then fails to enumerate. `eeprom_write.py` (hub held in reset with SW1, DIP 1 2 3 on) wrote a datasheet-default image with strings; hub A now enumerates as Adafruit Industries / Port Authority / PA-A, Multi-TT, all ports working |
 | JST-XH per-port connectors | Open | |
 | Chaining two hubs, USB | Works, with a restriction | Hub B on hub A port 4: nested uhubctl path `1-1.4` works, hub B ports switch 5/5, cutting hub A port 4 power-cycles hub B and its boards (empty 6/6, Feather RP2040 5/5, thumb drive 5/5). **Restriction:** with an ESP32 V2 on hub B, hub B never recovers from that cut (see problems). Keep USB-serial boards on the top-level hub, or switch their own port instead |
 | Chaining two hubs, I2C | Open | Needs hub B's INA3221 A0 jumper bridged (0x41) |
@@ -42,7 +42,7 @@ not yet tested or not conclusive.
 | Intermittent INA3221 read timeouts | Not the hub | Followed the controller's old dev firmware (SDIO build + SD benchmark). 0 errors in 60 reads after flashing CP 11.0.0-alpha.1 |
 | Barrel jack suspected | Not the cause | Coincided with the STEMMA cable coming loose. Cheap USB-to-barrel adapter does dip the rail more (4.77 V vs 4.98 V) but stays in spec |
 | Chained hub loops after its upstream port is cut, with an ESP32 V2 on it | Open, workaround | Hub B enumerates, `hub_ext_port_status failed (err = -71)` ~0.1 s later, disconnects, repeats forever. Same bus-powered or on its barrel, after a hub B reset, with autosuspend off. Not current: same ~900 mA capacitor spike as an RP2350, the V2's extra ~140 mA comes ~1 s later. Suspect (untested): its CH9102 connects at full speed the instant power arrives, mid hub start-up. Fine on the top-level hub (days of use, survives hub A resets). Workarounds: switch the V2's own port; or power hub B ports on one at a time |
-| SMBus and EEPROM modes do not start | Open, parked | Both: off USB, no 0x2C, host sees a failed low-speed device at every reset. Theory (unconfirmed): `1 1 1 0` latches EEPROM mode, and the blank EEPROM sets register 0xFA bit 0, swapping upstream D+/D-. Untested discriminator: `0 1 1 0`. Probing the bus during reset left SCL held low |
+| SMBus mode does not start | Open, parked | DIP `1 1 1 0`: off USB, no answer at 0x2C, host sees a failed low-speed device at every reset. A blank EEPROM caused the same signature in `1 1 1 1`, fixed by programming it; why SMBus mode matches it is unknown. Probing the bus during reset left SCL held low |
 
 ## Host setup needed (for the guide)
 

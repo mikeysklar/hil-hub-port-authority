@@ -40,6 +40,7 @@ addressed by USB path (`1-2` hub, port N), never by `ttyACM` number.
 | `smbus_probe.py` | T9 | scan, then block-read register 0x00 at the hub's SMBus address 0x2C (DIP `1 1 1 0`) |
 | `smbus_race.py` | T9 debug | probe 0x2C every 20 ms for N seconds while SW1 resets the hub, prints ACK/NACK changes |
 | `eeprom_dump.py` | T9 | read-only hex dump of the hub config EEPROM (24LC02, 0x50); needs DIP 1-3 on |
+| `eeprom_write.py` | T9d | write a USB2514B config image with custom manufacturer/product/serial strings, then verify; hub held in reset with SW1 |
 | `i2c_lines.py` | T9 debug | sample SCL/SDA levels on the controller to spot a bus held low |
 | `uf2_to_bin.py` | T13 | convert a UF2 to a raw image for openocd `program`; prints family, base and size |
 | `swd_port.sh` | T13 | SWD attach with the port off (expect fail) and on (reset halt, resume), RP2350 + Debug Probe |
