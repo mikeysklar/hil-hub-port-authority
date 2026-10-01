@@ -791,3 +791,93 @@ Adafruit 938 (1.3" 128x64) should run the same code if it is also SSD1306 at
   uhubctl every second over the controller's USB serial; stale after 5 s
   shows `?`. `oled_demo.sh 1-1 "4 2" 10`: port 4 and port 2 off/on each
   showed on the OLED within about a second (`results/t12-oled-push.txt`).
+
+## T11. Chaining, USB part, 2026-09-30: PROBLEM
+
+Hub B (second Rev C, DIP `0 0 0 0`) USB-C into hub A port 4, so hub B is
+`1-1.4`. ESP32 V2 on hub B port 1.
+
+- Hotplug: hub B enumerated, nested uhubctl path works, both report Self
+  Powered.
+- Per-port switching on hub B: `cycle_ports.py 1-1.4 1 5`, 5/5 `POWER_ON`
+  (`results/t11-hubB-port1-cycles.txt`).
+- **Cutting hub A port 4 (whole hub B) and switching it back on: hub B never
+  recovers.** It enumerates, then loops every ~0.4 s:
+  ```
+  hub 1-1.4:1.0: 4 ports detected
+  hub 1-1.4:1.0: hub_ext_port_status failed (err = -71)    ~107 ms later
+  usb 1-1.4: Failed to suspend device, error -71
+  usb 1-1.4: USB disconnect
+  ```
+  194 cycles in the first run, until port 4 was switched off.
+- Same loop: with hub B on its 5 V barrel, after a hub B SW1 reset, and
+  with hub B bus-powered (barrel out). Not autosuspend: with autosuspend
+  off the loop continues without the suspend message (rule since removed).
+- Hub A port 4 sysfs normal (`disable 0`, `over_current_count 0`).
+- **Workaround that works:** hub B ports off right after it enumerates
+  (raced `uhubctl -l 1-1.4 -a off`, won on try 42), then ports 2, 3, 4, 1
+  on one at a time 6 s apart: stable, ESP32 enumerates.
+- Pattern: Linux powers all four hub B ports together at hub activation;
+  the link fails ~0.1 s later. One port at a time is fine. Suspect: combined
+  inrush (4 x 100 uF port caps plus the board). Not explained: it also failed
+  with hub B on its barrel supply. Unconfirmed.
+- `chain_cut.py`'s uptime check is invalid for USB-UART boards: opening the
+  ESP32 V2 port reboots it (uptime 3.3 s before the cut). Use a native-USB
+  board.
+- Open: hub B empty; hub B on a different hub A port; hub B behind a
+  non-Port-Authority switched port; hub B straight on bene.
+
+### T11 follow-up: the board on hub B is the trigger, 2026-09-30
+
+Hub B bus-powered (barrel out) from hub A port 4. Cut = port 4 off 3 s, on.
+
+| Hub B port 1 | Cuts | Result |
+|---|---|---|
+| ESP32 V2 (CH9102 USB-UART) | many | loops every time (also seen with hub B on its barrel) |
+| empty | 6 | 6/6 clean, one enumeration, no errors |
+| Feather RP2040 (native USB) | 5 | 5/5 clean, board back each time |
+
+`chain_cut.py` with the RP2040: uptime 19.7 s before, 7.3 s after, reset
+reason `POWER_ON`, hub B and board back in 2.1 s. Cutting the parent port
+power-cycles the whole downstream hub and its boards, as intended
+(`results/t11-chain-cut-empty.txt`, `results/t11-chain-cut-rp2040.txt`).
+
+So chaining itself works. The loop needs the ESP32 V2 present when hub B
+powers up. Not yet known: ESP32 V2 on hub A directly at hub power-up (hub A
+SW1 reset), and whether other USB-UART boards do the same.
+
+### T11 follow-up: is it the ESP32 V2's current? Probably not, 2026-09-30
+
+`ina_inrush.py` (new): INA3221 shunt-only on one channel, ~288 us/sample for
+2.3 s across a port power-on. 3 trials each (`results/inrush-*.csv`).
+
+| | ESP32 V2, port 3 | Feather RP2350, port 2 |
+|---|---|---|
+| Power-on spike | 856-903 mA, >200 mA for ~0.75 ms | 891-920 mA, >200 mA for 0.5-0.76 ms |
+| 10-200 ms | ~50 mA | ~24 mA |
+| Later bursts | one 107-142 mA burst at ~1.04 s (radio start?) | none over 80 mA |
+| Settled | 51.7 mA | 20.5 mA |
+
+- The spike is the same on both boards, so it is port and board input
+  capacitance charging, not something ESP32-specific. Short spikes under
+  ~140 us are averaged into a sample, so true peaks may be higher.
+- The ESP32's only extra is a ~140 mA burst about 1 s after power-on. Hub B
+  fails ~0.1 s after its ports power on, well before that.
+- Other difference: the CH9102 USB-UART bridge connects to USB almost at
+  once (cycle_ports `back=0.0s`), while native-USB boards boot for ~1.5 s
+  first. So during hub B's start-up the ESP32 is already connecting on
+  port 1. Untested theory: an instant-connect device during hub B's port
+  power-up breaks it.
+- `oled_push.py` left running garbles REPL pastes to the controller (its
+  `PA` lines land in the paste). Stop it before running other scripts.
+
+### T11 follow-up: instant-connect high-speed device is fine, 2026-09-30
+
+USB thumb drive (`05e3:0751`, high-speed, connects at once) on hub B port 1:
+5/5 cuts clean, one enumeration each, no errors
+(`results/t11-chain-cut-thumbdrive.txt`). "Any device connecting during
+hub B start-up" is ruled out for high-speed devices. The ESP32 V2's CH9102 is
+full-speed (12M) and connects at once, so it goes through hub B's
+transaction translator during start-up; the native Feathers are also
+full-speed but connect ~1.5 s later. Untested: an instant-connect
+full-/low-speed device (keyboard, mouse).
