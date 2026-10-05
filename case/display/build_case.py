@@ -17,17 +17,17 @@ Writes next to this file:
 Frame: PCB coordinates from the Rev C gerbers, board back face on Z=0,
 components up. Same frame and hub stand-in as case/sandwich.
 
-The top plate sits on M2.5 standoffs (bought, not printed) at the four mount
-holes, top_gap above the board. Screws go down through clearance holes into
-the standoffs. Everything taller than top_gap pokes through snug cutouts;
+The top plate stands on printed bosses at the four mount holes, top_gap above
+the board. One M2.5 x 12 screw per hole goes down through the plate boss and
+the PCB into a heat-set insert in the back frame's boss. Everything taller than top_gap pokes through snug cutouts;
 cutouts on the board edge run out through the plate edge. The left edge stays
 open so both STEMMA QT ports can be plugged in under the plate overhang.
 
-OLED: on M2.5 x ol_standoff standoffs screwed into heat-set inserts, centred
-between the X10 JST-XH and the DC jack. Its STEMMA QT ports are on the back
+OLED: on printed spacers ol_standoff tall with a heat-set insert in each top,
+centred between the X10 JST-XH and the DC jack. Its STEMMA QT ports are on the back
 and face sideways; at this height the right one's plug clears the DC jack.
 The board is taller than the plate, so the top two inserts sit on a tab past
-the top edge. Bosses hang boss_drop under the plate to give the inserts depth.
+the top edge.
 
 QT Py: no mounting holes, so it rides in a printed cradle with its USB-C out
 the left edge. It slides in from the STEMMA end under lips on the castellated
@@ -37,9 +37,10 @@ and go down into plate inserts. The cradle's right end stops short of the X10
 plug and the QT Py's STEMMA plug lands below the X10 cutout.
 
 Back frame: two rails through the mount-hole rows and two ties at the hole
-columns, bot_standoff behind the board on M2.5 standoffs, with a flush
-heat-set insert at each hole. No hook notches: the rails run rail_len so
-your own hooks can grab them.
+columns, with a boss at each hole that holds the board frame_boss_h off the
+rails, clear of the THT leads, and carries a heat-set insert in its top. The
+bottom rail has two nicks on its lower edge, nick_pitch apart (six SKADIS
+holes on the staggered 20 mm grid), to seat SKADIS hooks.
 """
 
 import os
@@ -69,22 +70,24 @@ PARAMS = [
     ("# stack", None, ""),
     ("plate_t", 2.0, "plate thickness"),
     ("border", 1.5, "plate overhang past the board outline"),
-    ("top_gap", 5.0, "PCB top to plate underside. M2.5 x 5 standoff"),
-    ("standoff_d", 5.0, "standoff across flats, for the clash check"),
+    ("top_gap", 5.0, "PCB top to plate underside. Plate boss height"),
+    ("hub_boss_d", 5.5, "plate boss at the hub mount holes. Clears C3"),
     ("screw_d", 2.7, "M2.5 clearance hole"),
+    ("sw1_reach", 4.0, "extra plate cut above SW1 so it can be thrown"),
     ("# cutouts", None, ""),
     ("cut_margin", 0.5, "clearance around each part poking through"),
     ("# heat-set inserts, M2.5", None, ""),
     ("insert_d", 3.3, "insert pocket diameter"),
     ("insert_depth", 3.3, "insert pocket depth from the top face"),
     ("insert_wall", 1.0, "boss wall around the pocket"),
-    ("boss_drop", 2.0, "boss below the plate underside, for insert depth"),
+    ("boss_drop", 2.0, "QT Py insert boss below the plate, for insert depth"),
+    ("spacer_d", 5.5, "OLED spacer diameter. Clears the DC jack plug path"),
     ("insert_screw_d", 2.8, "screw clearance past the insert"),
     ("# OLED 0.96in 128x64 STEMMA QT (Adafruit 326), Adafruit CAD", None, ""),
     ("ol_w", 29.21, "outline X"),
     ("ol_l", 31.75, "outline Y including the bottom tabs"),
     ("ol_t", 1.6, "PCB thickness, assumed"),
-    ("ol_standoff", 8.0, "M2.5 standoff, plate top to OLED back"),
+    ("ol_standoff", 8.0, "printed spacer, plate top to OLED back"),
     ("ol_cx", 46.3, "centre X. X10 on the left, the DC jack plug on the right"),
     ("ol_y0", "=band_y1 + cut_margin + 0.5", "OLED bottom edge Y, clear of the band"),
     ("# QT Py ESP32-S3 (Adafruit 5426), Adafruit CAD", None, ""),
@@ -106,11 +109,15 @@ PARAMS = [
     ("cr_cbore_d", 5.0, "counterbore for the screw head"),
     ("cr_cbore_h", 2.0, "counterbore depth"),
     ("# back frame", None, ""),
-    ("bot_standoff", 5.0, "PCB back to rail face. M2.5 x 5 standoff, clears THT leads"),
+    ("frame_boss_h", 4.0, "PCB back to rail face, printed boss. Clears THT leads"),
+    ("frame_boss_d", 6.5, "frame boss diameter"),
     ("rail_w", 8.0, "rail width (Y)"),
     ("rail_t", 4.0, "rail thickness (Z)"),
     ("rail_len", 140.0, "rail length, centred on the board. Room for hooks"),
     ("tie_w", 6.0, "tie width (X) at the mount-hole columns"),
+    ("nick_pitch", 120.0, "SKADIS nick spacing, six holes on the 20 mm stagger"),
+    ("nick_w", 5.5, "nick width, takes a 5 mm SKADIS hook"),
+    ("nick_depth", 2.0, "nick depth into the bottom rail's lower edge"),
     ("# derived, do not edit", None, ""),
     ("plate_w", "=board_w + 2 * border", "plate outline X"),
     ("plate_h", "=board_h + 2 * border", "plate outline Y"),
@@ -120,8 +127,8 @@ PARAMS = [
     ("boss_d", "=insert_d + 2 * insert_wall", "insert boss diameter"),
     ("ol_x0", "=ol_cx - ol_w / 2", "OLED left edge X"),
     ("ol_z0", "=top_z1 + ol_standoff", "OLED back face Z"),
-    ("rail_z1", "=-bot_standoff", "rail front face Z"),
-    ("rail_z0", "=-bot_standoff - rail_t", "rail back face Z"),
+    ("rail_z1", "=-frame_boss_h", "rail front face Z"),
+    ("rail_z0", "=-frame_boss_h - rail_t", "rail back face Z"),
     ("rail_x0", "=board_w / 2 - rail_len / 2", "rail start X"),
     ("qt_x1", "=qt_x0 + qt_l", "QT Py STEMMA end X"),
     ("qt_y0", "=band_y1 + cut_margin + cr_wall + cr_clear", "QT Py lower edge Y"),
@@ -282,32 +289,47 @@ def cut_box(doc, name, x0, x1, y0, y1, z0, z1, margin=True):
 
 
 
+def za_top():
+    return "%stop_z0 - %g" % (P, EPS)
+
+
 def build_top(doc):
     z0, z1 = P + "top_z0", P + "top_z1"
     adds = rounded_plate(doc, "Top", z0)
     cuts = []
     for tag, ix, iy in HOLES:
         hx, hy = hole_xy(ix, iy)
-        cuts.append(cyl(doc, "TopScrew_" + tag, hx, hy, "%s - %g" % (z0, EPS),
-                        P + "screw_d / 2", "%splate_t + %g" % (P, 2 * EPS)))
+        adds.append(cyl(doc, "TopBoss_" + tag, hx, hy, P + "board_t",
+                        P + "hub_boss_d / 2", P + "top_gap"))
+        cuts.append(cyl(doc, "TopScrew_" + tag, hx, hy,
+                        "%sboard_t - %g" % (P, EPS), P + "screw_d / 2",
+                        "%stop_gap + %splate_t + %g" % (P, P, 2 * EPS)))
+    # SW1 reset slide switch: open from above and out the right edge so it
+    # can be thrown. Starts past the corner boss and leaves a web to the
+    # USB-A band so the corner stays attached.
+    cuts.append(box(doc, "TopCut_SW1", "88.01 - %ssw1_reach / 4 - 0.5" % P,
+                    "%shole_inset + %shub_boss_d / 2 + 0.3" % (P, P), za_top(),
+                    "%sboard_w + %sborder + 1 - (88.01 - %ssw1_reach / 4 - 0.5)"
+                    % (P, P, P),
+                    "13.40 + %ssw1_reach - (%shole_inset + %shub_boss_d / 2 + 0.3)"
+                    % (P, P, P), "%splate_t + %g" % (P, 2 * EPS)))
     # Tab past the top edge for the OLED's upper holes.
     adds.append(box(doc, "OledTab", P + "ol_x0", "%splate_h - %sborder - 1" % (P, P),
                     z0, P + "ol_w",
-                    "%sol_y0 + %sol_l + 0.5 - (%splate_h - %sborder - 1)"
+                    "%sol_y0 + 29.21 + %sspacer_d / 2 + 0.5 - (%splate_h - %sborder - 1)"
                     % (P, P, P, P), P + "plate_t"))
+    # OLED spacers: insert in the top, screw clearance down through the plate.
     for tag, hx, hy in OLED_HOLES:
         x = "%sol_x0 + %g" % (P, hx)
         y = "%sol_y0 + %g" % (P, hy)
-        adds.append(cyl(doc, "OledBoss_" + tag, x, y,
-                        "%s - %sboss_drop" % (z0, P), P + "boss_d / 2",
-                        "%sboss_drop + %splate_t" % (P, P)))
+        adds.append(cyl(doc, "OledSpacer_" + tag, x, y, z1,
+                        P + "spacer_d / 2", P + "ol_standoff"))
         cuts.append(cyl(doc, "OledInsert_" + tag, x, y,
-                        "%s - %sinsert_depth" % (z1, P), P + "insert_d / 2",
+                        "%sol_z0 - %sinsert_depth" % (P, P), P + "insert_d / 2",
                         "%sinsert_depth + %g" % (P, EPS)))
-        cuts.append(cyl(doc, "OledScrew_" + tag, x, y,
-                        "%s - %sboss_drop - %g" % (z0, P, EPS),
+        cuts.append(cyl(doc, "OledScrew_" + tag, x, y, "%s - %g" % (z0, EPS),
                         P + "insert_screw_d / 2",
-                        "%sboss_drop + %splate_t" % (P, P)))
+                        "%splate_t + %sol_standoff" % (P, P)))
     for tag, lx, ly in QT_SCREWS:
         x, y = qt_world(lx, ly)
         adds.append(cyl(doc, "QtBoss_" + tag, x, y,
@@ -484,7 +506,8 @@ def build_cradle(doc):
 
 def build_frame(doc):
     """Two rails through the mount-hole rows, two ties at the hole columns,
-    a flush heat-set insert at each hole for the back standoffs."""
+    a boss at each hole with a heat-set insert in its top, SKADIS nicks on
+    the bottom rail's lower edge."""
     z0 = P + "rail_z0"
     adds = []
     for tag, iy in (("bot", "0"), ("top", "1")):
@@ -500,12 +523,20 @@ def build_frame(doc):
     cuts = []
     for tag, ix, iy in HOLES:
         hx, hy = hole_xy(ix, iy)
+        adds.append(cyl(doc, "FrameBoss_" + tag, hx, hy, P + "rail_z1",
+                        P + "frame_boss_d / 2", P + "frame_boss_h"))
         cuts.append(cyl(doc, "FrameInsert_" + tag, hx, hy,
-                        "%srail_z1 - %sinsert_depth" % (P, P),
+                        "-%sinsert_depth" % P,
                         P + "insert_d / 2", "%sinsert_depth + %g" % (P, EPS)))
         cuts.append(cyl(doc, "FrameScrew_" + tag, hx, hy,
                         "%s - %g" % (z0, EPS), P + "insert_screw_d / 2",
-                        "%srail_t + %g" % (P, 2 * EPS)))
+                        "%srail_t + %sframe_boss_h" % (P, P)))
+    rail_lo = "%shole_inset - %srail_w / 2" % (P, P)
+    for tag, sign in (("l", "-"), ("r", "+")):
+        cx = "%sboard_w / 2 %s %snick_pitch / 2" % (P, sign, P)
+        cuts.append(box(doc, "Nick_" + tag, "%s - %snick_w / 2" % (cx, P),
+                        "%s - 1" % rail_lo, "%s - %g" % (z0, EPS), P + "nick_w",
+                        "%snick_depth + 1" % P, "%srail_t + %g" % (P, 2 * EPS)))
     return finish(doc, "Frame", adds, cuts)
 
 
@@ -584,16 +615,14 @@ def check(top, cradle, frame, hub, oled, qtpy, sheet):
                         App.Vector(13.97 - 6.175, 35.95, 1.6 + 1.63 - 3.25))
     v = t.common(plug).Volume
     report("top vs host USB-C plug", v < 1e-3, "%.4f mm3" % v)
-    standoffs = [Part.makeCylinder(sheet.standoff_d / 2, sheet.top_gap,
-                                   App.Vector(cx, cy, sheet.board_t))
-                 for cx, cy in ((2.54, 2.54), (88.9, 2.54), (2.54, 33.02),
-                                (88.9, 33.02))]
-    for s in standoffs:
-        v = s.common(parts).Volume
-        report("standoff %.2f,%.2f vs parts" % (s.BoundBox.Center.x,
-                                                s.BoundBox.Center.y),
-               v < 1e-3, "%.4f mm3" % v)
-        report("plate sits on standoff", t.distToShape(s)[0] < 1e-3)
+    report("plate bosses on pcb", t.distToShape(pcb)[0] < 1e-3)
+    report("frame bosses on pcb", f.distToShape(pcb)[0] < 1e-3)
+    # Slider travel, the middle of the SW1 body. The 0.7 mm at its lower end
+    # stays under the plate to keep the corner boss attached.
+    sw1 = Part.makeBox(4.39, 6.0, sheet.top_gap + sheet.plate_t + 1,
+                       App.Vector(88.01, 6.40, sheet.board_t + 1.4))
+    v = t.common(sw1).Volume
+    report("SW1 open from above", v < 1e-3, "%.3f mm3 of plate over it" % v)
     # DC jack plug goes in from the top edge: keep its path clear.
     dc_plug = Part.makeBox(9.0, 20.0, 11.0, App.Vector(61.61, 36.06, 1.6))
     v = t.common(dc_plug).Volume
@@ -606,34 +635,44 @@ def check(top, cradle, frame, hub, oled, qtpy, sheet):
                        ("QT Py", qt)):
         v = shp.common(x10_up).Volume
         report("%s vs X10 plug and wires" % label, v < 1e-3, "%.4f mm3" % v)
+    report("OLED rests on spacers", oled.Shape.distToShape(t)[0] < 1e-3)
     for tag, hx, hy in OLED_HOLES:
         x, y = sheet.ol_x0 + hx, sheet.ol_y0 + hy
-        ring = Part.makeCylinder(sheet.boss_d / 2 - 0.01, sheet.plate_t,
-                                 App.Vector(x, y, sheet.top_z0))
-        ring = ring.cut(Part.makeCylinder(sheet.insert_d / 2 + 0.01,
-                                          sheet.plate_t,
-                                          App.Vector(x, y, sheet.top_z0)))
-        v = ring.cut(t).Volume
-        report("OLED boss %s in plate" % tag, v < 1e-3, "%.4f mm3 missing" % v)
-        stand = Part.makeCylinder(2.5, sheet.ol_standoff,
-                                  App.Vector(x, y, sheet.top_z1))
-        report("OLED standoff %s on plate" % tag,
-               t.distToShape(stand)[0] < 1e-3)
-    for cx, cy in ((2.54, 2.54), (88.9, 2.54), (2.54, 33.02), (88.9, 33.02)):
-        so = Part.makeCylinder(sheet.standoff_d / 2, sheet.bot_standoff,
-                               App.Vector(cx, cy, -sheet.bot_standoff))
-        v = so.common(leads).Volume
-        report("back standoff %.2f,%.2f vs leads" % (cx, cy), v < 1e-3,
-               "%.4f mm3" % v)
-        report("frame under standoff %.2f,%.2f" % (cx, cy),
-               f.distToShape(so)[0] < 1e-3)
         pocket = Part.makeCylinder(sheet.insert_d / 2 - 0.05, sheet.insert_depth,
-                                   App.Vector(cx, cy, sheet.rail_z1 - sheet.insert_depth))
+                                   App.Vector(x, y, sheet.ol_z0 - sheet.insert_depth))
+        v = pocket.common(t).Volume
+        report("OLED spacer insert %s" % tag, v < 1e-3, "%.4f mm3" % v)
+        ring = Part.makeCylinder(sheet.spacer_d / 2 - 0.01, sheet.ol_standoff,
+                                 App.Vector(x, y, sheet.top_z1)).cut(
+            Part.makeCylinder(sheet.insert_d / 2 + 0.01, sheet.ol_standoff,
+                              App.Vector(x, y, sheet.top_z1)))
+        v = ring.cut(t).Volume
+        report("OLED spacer %s solid" % tag, v < 1e-3, "%.4f mm3 missing" % v)
+    for cx, cy in ((2.54, 2.54), (88.9, 2.54), (2.54, 33.02), (88.9, 33.02)):
+        pocket = Part.makeCylinder(sheet.insert_d / 2 - 0.05, sheet.insert_depth,
+                                   App.Vector(cx, cy, -sheet.insert_depth))
         v = pocket.common(f).Volume
         report("frame insert pocket %.2f,%.2f" % (cx, cy), v < 1e-3,
                "%.4f mm3" % v)
-    gap = -sheet.bot_standoff + LEAD_LEN
-    report("lead clearance to rails", gap < 0, "%.2f mm" % -gap)
+        hole = Part.makeCylinder(sheet.screw_d / 2 - 0.05,
+                                 sheet.top_gap + sheet.plate_t,
+                                 App.Vector(cx, cy, sheet.board_t))
+        v = hole.common(t).Volume
+        report("plate screw hole %.2f,%.2f" % (cx, cy), v < 1e-3, "%.4f mm3" % v)
+    report("lead clearance to rails", sheet.frame_boss_h > LEAD_LEN,
+           "%.2f mm" % (sheet.frame_boss_h - LEAD_LEN))
+    rail_lo = sheet.hole_inset - sheet.rail_w / 2
+    for sign in (-1, 1):
+        cx = sheet.board_w / 2 + sign * sheet.nick_pitch / 2
+        probe = Part.makeBox(sheet.nick_w - 0.1, sheet.nick_depth - 0.05,
+                             sheet.rail_t,
+                             App.Vector(cx - sheet.nick_w / 2 + 0.05, rail_lo,
+                                        sheet.rail_z0))
+        v = probe.common(f).Volume
+        report("SKADIS nick at x=%.2f" % cx, v < 1e-3, "%.4f mm3" % v)
+    stack = sheet.plate_t + sheet.top_gap + sheet.board_t + sheet.insert_depth
+    print("hub screws: %.1f mm through plate, boss and PCB into the insert,"
+          " use M2.5 x 12" % (stack - sheet.insert_depth))
     through = [n for n, *_r, h in PARTS if h > sheet.top_gap]
     print("parts through the top plate:", ", ".join(through))
     return ok
