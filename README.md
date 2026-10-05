@@ -72,6 +72,7 @@ Full notes: [docs/host-setup.md](docs/host-setup.md).
 | [test-scripts/](test-scripts/) | test scripts, see its README |
 | [case/sandwich/](case/sandwich/) | two-plate case: FreeCAD script, FCStd, STEP, 3MF |
 | [case/skadis/](case/skadis/) | IKEA SKADIS frame: FreeCAD script, FCStd, STEP, 3MF, STL |
+| [case/display/](case/display/) | top plate with QT Py ESP32-S3 cradle and OLED mount, rail frame, heat-set inserts: FreeCAD script, FCStd, STEP |
 
 Build a case with `freecadcmd build_case.py`; it also writes the STLs left
 out of the repo.
