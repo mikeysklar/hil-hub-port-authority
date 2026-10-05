@@ -10,8 +10,7 @@ Run headless:
 
 Writes next to this file:
     display_case.FCStd         parametric model, every setting in the Params sheet
-    top_plate.step/.stl        STL laid outer face down for printing
-    qtpy_cradle.step/.stl      STL laid floor down for printing
+    top_plate.step/.stl        STL laid underside down for printing
     frame.step/.stl            STL laid back face down for printing
 
 Frame: PCB coordinates from the Rev C gerbers, board back face on Z=0,
@@ -26,18 +25,19 @@ through snug cutouts; cutouts on the board edge run out through the plate
 edge. The left edge stays
 open so both STEMMA QT ports can be plugged in under the plate overhang.
 
-OLED: on printed spacers ol_standoff tall with a heat-set insert in each top,
-centred between the X10 JST-XH and the DC jack. Its STEMMA QT ports are on the back
-and face sideways; at this height the right one's plug clears the DC jack.
-The board is taller than the plate, so the top two inserts sit on a tab past
-the top edge.
+OLED: on printed spacers ol_standoff tall (same as the frame bosses) with a
+heat-set insert in each top, centred between the X10 JST-XH and the DC jack.
+Its STEMMA QT ports are on the back and face sideways. The cable goes in the
+left one, whose plug sits over X10, so X10 stays empty; the right one is
+blocked by the DC jack and unused. The board is taller than the plate, so the
+top two inserts sit on a tab past the top edge.
 
-QT Py: no mounting holes, so it rides in a printed cradle with its USB-C out
-the left edge. It slides in from the STEMMA end under lips on the castellated
-edges until it meets stops at the USB-C end; plugging in the STEMMA cable
-pushes it further home. Two heat-set inserts sit in the cradle's underside;
-M2.5 x 5 screws come up through the plate into them. Fit the cradle before
-the plate goes on the hub. The cradle's right end stops short of the X10
+QT Py: no mounting holes, so it rides in a cradle printed as part of the top
+plate, USB-C out the left edge. It slides in from the STEMMA end under lips
+on the castellated edges until it meets stops at the USB-C end; plugging in
+the STEMMA cable pushes it further home. No screws. The plate grows a tab
+past its left edge so the cradle is supported all the way down to the bed.
+The cradle's right end stops short of the X10
 plug and the QT Py's STEMMA plug lands below the X10 cutout.
 
 Back frame: two rails through the mount-hole rows and two ties at the hole
@@ -90,7 +90,7 @@ PARAMS = [
     ("ol_w", 29.21, "outline X"),
     ("ol_l", 31.75, "outline Y including the bottom tabs"),
     ("ol_t", 1.6, "PCB thickness, assumed"),
-    ("ol_standoff", 8.0, "printed spacer, plate top to OLED back"),
+    ("ol_standoff", "=frame_boss_h", "printed spacer, plate top to OLED back"),
     ("ol_cx", 46.3, "centre X. X10 on the left, the DC jack plug on the right"),
     ("ol_y0", "=band_y1 + cut_margin + 0.5", "OLED bottom edge Y, clear of the band"),
     ("# QT Py ESP32-S3 (Adafruit 5426), Adafruit CAD", None, ""),
@@ -100,11 +100,12 @@ PARAMS = [
     ("qt_usb_over", 1.02, "USB-C overhang past the PCB edge"),
     ("qt_x0", -3.5, "USB-C end X. Right end clears the X10 plug"),
     ("# QT Py cradle", None, ""),
-    ("cr_floor", 4.0, "floor thickness, takes the inserts from below"),
-    ("cr_wall", 1.2, "side wall thickness"),
-    ("cr_clear", 0.2, "PCB to wall"),
+    ("cr_floor", 2.0, "floor on the plate, carries the ESP32-S3 relief"),
+    ("cr_wall", 1.4, "side wall thickness. Max that fits between the band and X9 plug notches"),
+    ("cr_clear", 0.4, "PCB to wall, each side. Loose fit"),
+    ("cr_gap", 0.5, "PCB top to lip underside. Loose fit"),
     ("cr_lip", 0.5, "lip reach over the castellated edge"),
-    ("cr_lip_t", 0.8, "lip thickness"),
+    ("cr_lip_t", 1.5, "lip thickness"),
     ("cr_stop", 1.2, "end stop length past the USB-C end"),
     ("cr_stop_w", 2.4, "end stop width, clear of the USB-C"),
     ("cr_relief", 1.2, "relief under the ESP32-S3 on the QT Py's underside"),
@@ -157,10 +158,8 @@ CUTS = [
 OLED_HOLES = (("bl", 2.54, 2.54), ("br", 26.67, 2.54), ("tl", 2.54, 29.21),
               ("tr", 26.67, 29.21))
 
-# QT Py cradle screws into plate inserts, QT Py-local mm: x across the
-# castellated edges, y from the STEMMA end. Clear of the ESP32-S3 underneath.
-QT_SCREWS = (("a", 4.0, 3.0), ("b", 10.0, 15.5))
-# ESP32-S3 QFN on the QT Py's underside, local centre and size.
+# ESP32-S3 QFN on the QT Py's underside, QT Py-local mm (x across the
+# castellated edges, y from the STEMMA end), centre and size.
 QT_QFN = (10.33, 9.20, 7.0)
 
 
@@ -326,10 +325,9 @@ def build_top(doc):
         cuts.append(cyl(doc, "OledScrew_" + tag, x, y, "%s - %g" % (z0, EPS),
                         P + "insert_screw_d / 2",
                         "%splate_t + %sol_standoff" % (P, P)))
-    for tag, lx, ly in QT_SCREWS:
-        x, y = qt_world(lx, ly)
-        cuts.append(cyl(doc, "QtScrew_" + tag, x, y, "%s - %g" % (z0, EPS),
-                        P + "screw_d / 2", "%splate_t + %g" % (P, 2 * EPS)))
+    cadds, ccuts = cradle_parts(doc)
+    adds += cadds
+    cuts += ccuts
     za, zb = "%s - %g" % (z0, EPS), "%s + %g" % (z1, EPS)
     for name, x0, x1, y0, y1 in CUTS:
         cuts.append(cut_box(doc, "TopCut_" + name, x0, x1, y0, y1, za, zb))
@@ -452,21 +450,25 @@ def corner_box(doc, name, x0, x1, y0, y1, z0, z1):
                "(%s) - (%s)" % (y1, y0), "(%s) - (%s)" % (z1, z0))
 
 
-def build_cradle(doc):
-    """QT Py cradle: floor, side walls with lips over the castellated edges,
-    end stops at the USB-C end. The QT Py slides in from the STEMMA end."""
+def cradle_parts(doc):
+    """QT Py cradle on the top plate: a plate tab under it past the left
+    edge, floor, side walls with lips over the castellated edges, end stops
+    at the USB-C end. The QT Py slides in from the STEMMA end.
+    Returns (adds, cuts) for the plate."""
     e = lambda expr: " ".join(P + t if t[0].isalpha() else t
                               for t in expr.split())
     ya, yb = e("qt_y0 - cr_clear - cr_wall"), e("qt_y0 + qt_w + cr_clear + cr_wall")
     fz0, fz1 = P + "top_z1", P + "qt_z0"
-    wz1 = e("qt_z0 + qt_t + 0.1 + cr_lip_t")
-    adds = [corner_box(doc, "CrFloor", P + "qt_x0", P + "qt_x1",
+    wz1 = e("qt_z0 + qt_t + cr_gap + cr_lip_t")
+    adds = [corner_box(doc, "CrTab", e("qt_x0 - cr_stop"), "0", ya, yb,
+                       P + "top_z0", fz0),
+            corner_box(doc, "CrFloor", P + "qt_x0", P + "qt_x1",
                        ya, yb, fz0, fz1)]
     for tag, y0, y1 in (("lo", ya, e("qt_y0 - cr_clear")),
                         ("hi", e("qt_y0 + qt_w + cr_clear"), yb)):
         adds.append(corner_box(doc, "CrWall_" + tag, P + "qt_x0",
                                P + "qt_x1", y0, y1, fz1, wz1))
-    lz0 = e("qt_z0 + qt_t + 0.1")
+    lz0 = e("qt_z0 + qt_t + cr_gap")
     for tag, y0, y1 in (("lo", e("qt_y0 - cr_clear - 0.1"), e("qt_y0 + cr_lip")),
                         ("hi", e("qt_y0 + qt_w - cr_lip"),
                          e("qt_y0 + qt_w + cr_clear + 0.1"))):
@@ -483,11 +485,7 @@ def build_cradle(doc):
                            "%s + %g" % (qx, half), "%s - %g" % (qy, half),
                            "%s + %g" % (qy, half), e("qt_z0 - cr_relief"),
                            e("qt_z0 + 0.1")))
-    for tag, lx, ly in QT_SCREWS:
-        x, y = qt_world(lx, ly)
-        cuts.append(cyl(doc, "CrInsert_" + tag, x, y, e("top_z1 - 0.1"),
-                        P + "insert_d / 2", e("insert_depth + 0.1")))
-    return finish(doc, "QtCradle", adds, cuts)
+    return adds, cuts
 
 
 def build_frame(doc):
@@ -552,7 +550,7 @@ def build_qtpy(doc, s):
 
 
 def build_oled(doc, s):
-    """OLED stand-in on its standoffs: PCB, glass, back JST SH ports, right
+    """OLED stand-in on its standoffs: PCB, glass, back JST SH ports, left
     STEMMA QT plug. Adafruit CAD positions, OLED-local mm."""
     ox, oy, zb, zt = s.ol_x0, s.ol_y0, s.ol_z0, s.ol_z0 + s.ol_t
 
@@ -566,15 +564,15 @@ def build_oled(doc, s):
     shapes = [pcb, b(1.26, 27.96, 7.67, 26.93, zt, zt + 1.4),
               b(0.45, 4.7, 13.51, 19.51, zb - 2.95, zb),
               b(24.51, 28.76, 13.51, 19.51, zb - 2.95, zb),
-              b(28.76, 34.26, 14.26, 18.76, zb - 2.95, zb)]
+              b(-5.05, 0.45, 14.26, 18.76, zb - 2.95, zb)]
     o = doc.addObject("Part::Feature", "Oled")
     o.Shape = Part.makeCompound(shapes)
     return o
 
 
-def check(top, cradle, frame, hub, oled, qtpy, sheet):
+def check(top, frame, hub, oled, qtpy, sheet):
     pcb, parts, leads = (o.Shape for o in hub)
-    t, c, f = top.Shape, cradle.Shape, frame.Shape
+    t, f = top.Shape, frame.Shape
     qt, qt_plug = (o.Shape for o in qtpy)
     ok = True
 
@@ -583,15 +581,14 @@ def check(top, cradle, frame, hub, oled, qtpy, sheet):
         ok = ok and good
         print("%-5s %-28s %s" % ("ok" if good else "FAIL", label, detail))
 
-    for label, x in (("top", t), ("cradle", c), ("frame", f)):
+    for label, x in (("top", t), ("frame", f)):
         report(label + " valid", x.isValid())
         report(label + " solids", len(x.Solids) == 1, "%d" % len(x.Solids))
     for label, a, other in (("top vs pcb", t, pcb), ("top vs parts", t, parts),
                             ("top vs OLED", t, oled.Shape),
-                            ("top vs QT Py", t, qt), ("top vs cradle", t, c),
-                            ("cradle vs QT Py", c, qt),
+                            ("OLED vs parts", oled.Shape, parts),
+                            ("top vs QT Py", t, qt),
                             ("top vs QT Py USB plug", t, qt_plug),
-                            ("cradle vs QT Py USB plug", c, qt_plug),
                             ("frame vs pcb", f, pcb),
                             ("frame vs leads", f, leads)):
         v = a.common(other).Volume
@@ -616,15 +613,6 @@ def check(top, cradle, frame, hub, oled, qtpy, sheet):
                t.distToShape(so)[0] < 1e-3)
     report("plate underside flat", abs(t.BoundBox.ZMin - sheet.top_z0) < 1e-6,
            "ZMin %.2f" % t.BoundBox.ZMin)
-    for tag, lx, ly in QT_SCREWS:
-        x, y = sheet.qt_x1 - ly, sheet.qt_y0 + lx
-        pocket = Part.makeCylinder(sheet.insert_d / 2 - 0.05, sheet.insert_depth,
-                                   App.Vector(x, y, sheet.top_z1))
-        v = pocket.common(c).Volume
-        report("cradle insert %s" % tag, v < 1e-3, "%.4f mm3" % v)
-        report("cradle insert %s skin" % tag,
-               sheet.cr_floor - sheet.insert_depth >= 0.5,
-               "%.2f mm under the QT Py" % (sheet.cr_floor - sheet.insert_depth))
     report("frame bosses on pcb", f.distToShape(pcb)[0] < 1e-3)
     # Slider travel, the middle of the SW1 body. The strip at its lower end
     # stays under the plate to keep the corner attached.
@@ -638,10 +626,9 @@ def check(top, cradle, frame, hub, oled, qtpy, sheet):
     report("top vs DC jack plug path", v < 1e-3, "%.4f mm3" % v)
     # X10 plug and wires go straight up from the header.
     x10_up = Part.makeBox(12.4, 5.75, 40.0, App.Vector(19.2, 30.02, 1.6))
-    report("cradle sits on plate", c.distToShape(t)[0] < 1e-3)
-    report("QT Py sits in cradle", qt.distToShape(c)[0] < 1e-3)
-    for label, shp in (("top", t), ("OLED", oled.Shape), ("cradle", c),
-                       ("QT Py", qt)):
+    report("QT Py sits in cradle", qt.distToShape(t)[0] < 1e-3)
+    # X10 stays empty with the OLED cabled: its left plug sits over X10.
+    for label, shp in (("top", t), ("QT Py", qt)):
         v = shp.common(x10_up).Volume
         report("%s vs X10 plug and wires" % label, v < 1e-3, "%.4f mm3" % v)
     report("OLED rests on spacers", oled.Shape.distToShape(t)[0] < 1e-3)
@@ -687,7 +674,6 @@ def check(top, cradle, frame, hub, oled, qtpy, sheet):
 doc = App.newDocument("display_case")
 sheet = build_sheet(doc)
 top = build_top(doc)
-cradle = build_cradle(doc)
 frame = build_frame(doc)
 hub = build_hub(doc)
 doc.recompute()
@@ -695,7 +681,7 @@ oled = build_oled(doc, sheet)
 qtpy = build_qtpy(doc, sheet)
 doc.recompute()
 
-ok = check(top, cradle, frame, hub, oled, qtpy, sheet)
+ok = check(top, frame, hub, oled, qtpy, sheet)
 
 doc.saveAs(DOC_PATH)
 hidden = [o.Name for o in doc.Objects
@@ -707,18 +693,15 @@ write_view_state(DOC_PATH, {
     "HubParts": ("#B0B0B8", "#404040", 0),
     "HubLeads": ("#FF8C00", "#FF8C00", 0),
     "Oled": ("#101010", "#40C0FF", 0),
-    "QtCradle": ("#1A1A1F", "#FF2D9B", 30),
     "Frame": ("#1A1A1F", "#FF2D9B", 45),
     "QtPy": ("#2A2A6E", "#8080FF", 0),
     "QtPlug": ("#808080", "#404040", 70),
 }, hidden)
 
-for obj, stem, flip in ((top, "top_plate", True), (cradle, "qtpy_cradle", False),
-                        (frame, "frame", False)):
+# Both print as modelled: plate underside down, frame back face down.
+for obj, stem in ((top, "top_plate"), (frame, "frame")):
     obj.Shape.exportStep(os.path.join(HERE, stem + ".step"))
     s = obj.Shape.copy()
-    if flip:
-        s.rotate(App.Vector(0, 0, 0), App.Vector(1, 0, 0), 180)
     s.translate(App.Vector(0, 0, -s.BoundBox.ZMin))
     s.exportStl(os.path.join(HERE, stem + ".stl"))
 
