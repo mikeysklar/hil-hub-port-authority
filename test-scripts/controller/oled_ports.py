@@ -6,7 +6,14 @@
 # On/off for all four ports comes from the host: oled_push.py sends
 # "PA 1101\n" (port 1..4 power, from uhubctl) over USB serial. If no update
 # arrives for STALE_S, on/off shows "?".
-# Needs adafruit_displayio_ssd1306 and adafruit_display_text (11.x bundle).
+# Adafruit IO: every AIO_S, posts ports 1-3 mA to feeds pa.port1-ma ..
+# pa.port3-ma over HTTP. HTTP posts do not create feeds: make group "pa"
+# and the three feeds first. Needs CIRCUITPY_WIFI_SSID/PASSWORD and
+# ADAFRUIT_AIO_USERNAME/KEY in settings.toml; without the AIO keys it only
+# drives the OLED. Post status shows on the title line.
+# Needs adafruit_displayio_ssd1306, adafruit_display_text, adafruit_requests
+# and adafruit_connection_manager (11.x bundle).
+import os
 import sys
 import time
 import board
@@ -14,18 +21,25 @@ import displayio
 import i2cdisplaybus
 import supervisor
 import terminalio
+import wifi
 from adafruit_display_text import label
+import adafruit_connection_manager
 import adafruit_displayio_ssd1306
+import adafruit_requests
 
 INA = 0x40
 STALE_S = 5
+AIO_S = 60
+AIO_USER = os.getenv("ADAFRUIT_AIO_USERNAME")
+AIO_KEY = os.getenv("ADAFRUIT_AIO_KEY")
 displayio.release_displays()
 i2c = board.STEMMA_I2C()
 bus = i2cdisplaybus.I2CDisplayBus(i2c, device_address=0x3D)
 display = adafruit_displayio_ssd1306.SSD1306(bus, width=128, height=64)
 
 group = displayio.Group()
-group.append(label.Label(terminalio.FONT, text="Port Authority", x=0, y=4))
+title = label.Label(terminalio.FONT, text="Port Authority", x=0, y=4)
+group.append(title)
 rows = []
 for n in range(4):
     row = label.Label(terminalio.FONT, text="", x=0, y=16 + 12 * n)
@@ -37,6 +51,13 @@ b = bytearray(2)
 power = "????"
 last_push = None
 line = ""
+ma_now = [None] * 3
+last_aio = -AIO_S
+requests = None
+if AIO_USER and AIO_KEY:
+    pool = adafruit_connection_manager.get_radio_socketpool(wifi.radio)
+    ssl = adafruit_connection_manager.get_radio_ssl_context(wifi.radio)
+    requests = adafruit_requests.Session(pool, ssl)
 
 
 def reg(n):
@@ -69,6 +90,23 @@ def state(p):
     return {"1": "on ", "0": "off"}.get(power[p], "?  ")
 
 
+def post_aio():
+    if not wifi.radio.connected:
+        return "noWiFi"
+    url = "https://io.adafruit.com/api/v2/%s/feeds/pa.port%d-ma/data"
+    for ch in range(3):
+        if ma_now[ch] is None:
+            continue
+        try:
+            with requests.post(url % (AIO_USER, ch + 1), headers={"X-AIO-Key": AIO_KEY},
+                               json={"value": round(ma_now[ch], 1)}) as r:
+                if r.status_code != 200:
+                    return "AIO %d" % r.status_code
+        except (OSError, RuntimeError):
+            return "AIOerr"
+    return "AIO"
+
+
 while True:
     read_host()
     for ch in range(3):
@@ -76,7 +114,12 @@ while True:
             volts = (reg(2 + 2 * ch) >> 3) * 0.008
             ma = (reg(1 + 2 * ch) >> 3) * 40e-6 / 0.1 * 1000
             rows[ch].text = "P%d %s %4.2fV %5.1fmA" % (ch + 1, state(ch), volts, ma)
+            ma_now[ch] = ma
         except OSError as e:
+            ma_now[ch] = None
             rows[ch].text = "P%d %s read err %d" % (ch + 1, state(ch), e.errno)
     rows[3].text = "P4 %s   (no INA)" % state(3)
+    if requests and time.monotonic() - last_aio >= AIO_S:
+        last_aio = time.monotonic()
+        title.text = "Port Authority " + post_aio()
     time.sleep(0.2)
