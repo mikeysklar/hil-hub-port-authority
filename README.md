@@ -1,5 +1,9 @@
 # hil-hub-port-authority
 
+[![Port Authority hub in the OLED display case, showing live voltage and current per port](images/oled-case.jpg)](https://drive.google.com/file/d/1w-OZUrAUlDJJefoLmWJcbIFCo_5FYicz/view?usp=sharing)
+
+[▶ Watch the video](https://drive.google.com/file/d/1w-OZUrAUlDJJefoLmWJcbIFCo_5FYicz/view?usp=sharing)
+
 Test notes, scripts and cases for the **Port Authority** 4-port USB hub
 (Adafruit Smart HIL Hub Rev C), first JLC run, tested 2026-09-24 to 2026-10-01.
 
