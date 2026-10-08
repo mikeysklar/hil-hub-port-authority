@@ -102,7 +102,7 @@ def post_aio():
                                json={"value": round(ma_now[ch], 1)}) as r:
                 if r.status_code != 200:
                     return "AIO %d" % r.status_code
-        except (OSError, RuntimeError):
+        except Exception:  # adafruit_requests can raise ValueError on a garbled reply
             return "AIOerr"
     return "AIO"
 
