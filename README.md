@@ -1,5 +1,9 @@
 # hil-hub-port-authority
 
+[![Port Authority hub in the OLED display case, showing live voltage and current per port](images/oled-case.jpg)](https://drive.google.com/file/d/1w-OZUrAUlDJJefoLmWJcbIFCo_5FYicz/view?usp=sharing)
+
+[▶ Watch the video](https://drive.google.com/file/d/1w-OZUrAUlDJJefoLmWJcbIFCo_5FYicz/view?usp=sharing)
+
 Test notes, scripts and cases for the **Port Authority** 4-port USB hub
 (Adafruit Smart HIL Hub Rev C), first JLC run, tested 2026-09-24 to 2026-10-01.
 
@@ -72,6 +76,7 @@ Full notes: [docs/host-setup.md](docs/host-setup.md).
 | [test-scripts/](test-scripts/) | test scripts, see its README |
 | [case/sandwich/](case/sandwich/) | two-plate case: FreeCAD script, FCStd, STEP, 3MF |
 | [case/skadis/](case/skadis/) | IKEA SKADIS frame: FreeCAD script, FCStd, STEP, 3MF, STL |
+| [case/display/](case/display/) | top plate with QT Py ESP32-S3 cradle and OLED mount, rail frame, heat-set inserts: FreeCAD script, FCStd, STEP |
 
 Build a case with `freecadcmd build_case.py`; it also writes the STLs left
 out of the repo.
